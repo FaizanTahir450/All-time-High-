@@ -1,0 +1,63 @@
+name: ATH Zone Scan
+
+on:
+  schedule:
+    - cron: "15 0 * * *"   # daily — 00:15 UTC (05:15 PKT)
+  workflow_dispatch:        # manual run
+    inputs:
+      exchanges:
+        description: "Exchanges to require a listing on (comma-separated: binance, mexc, kucoin, bybit, okx, gate, coinbase, ...)"
+        type: string
+        default: binance
+      dry_run:
+        description: "Dry run — print the message in the job log, send nothing, write nothing"
+        type: boolean
+        default: false
+
+# Allow the job to commit state.json / archive / matches log back to the repo.
+permissions:
+  contents: write
+
+# Never let two runs race on the commit-back.
+concurrency:
+  group: ath-zone-scan
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run scanner
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          COINGECKO_API_KEY: ${{ secrets.COINGECKO_API_KEY }}          # optional free Demo key
+          # Manual input wins; otherwise the repo variable EXCHANGES; otherwise Binance only.
+          EXCHANGES: ${{ inputs.exchanges || vars.EXCHANGES || 'binance' }}
+          DRY_RUN: ${{ inputs.dry_run == true && '1' || '0' }}
+        run: python scanner.py
+
+      - name: Commit state, archive and matches log
+        if: ${{ inputs.dry_run != true }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          for f in state.json alerts_archive.txt matches.jsonl; do
+            [ -f "$f" ] && git add "$f"
+          done
+          if git diff --cached --quiet; then
+            echo "Nothing to commit."
+          else
+            git commit -m "chore: ATH zone scan — update state + archive [skip ci]"
+            git push || (git pull --rebase && git push)
+          fi
