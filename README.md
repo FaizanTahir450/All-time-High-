@@ -1,4 +1,10 @@
-# ATH Zone Scanner (CoinGecko → Telegram)
+# ATH Zone Scanners (Crypto + PSX → Telegram)
+
+Two scanners in one repo, both free on GitHub Actions, both posting to the same
+Telegram chat: a **crypto** screener (this section) and a **Pakistan Stock
+Exchange** screener (see *PSX stocks* below).
+
+## Crypto
 
 Every day this finds the coins that are **close to their all-time high** while
 still being **small/mid caps** with **most of their supply locked**, and that are
@@ -57,6 +63,72 @@ Funnel: 1,240 coins $10.0M–$500M → 96 within 40% of ATH → 23 with ≥60% l
 
 ---
 
+## PSX stocks (Pakistan Stock Exchange)
+
+`psx_scanner.py` applies **one rule** to every listed PSX equity: the last close
+is **0 % – 40 % below the all-time high**. No market-cap or float filter, so the
+coverage is the whole exchange.
+
+- **Universe:** all listed equities from the official PSX Data Portal, about 705
+  tickers, excluding debt instruments, ETFs, rights and preference shares. A
+  stock that has not traded for 10 calendar days is held out until it trades
+  again, and a handful of dead listings with no price history are skipped.
+- **All-time high, adjusted for splits and bonuses.** PSX price history is *not*
+  adjusted for bonus shares, splits or rights issues. Lucky Cement, for example,
+  shows a raw high of 1,796 from before its 2025 split against a price near 430,
+  which would read as 76 % below its high. The scanner fixes this: PSX caps daily
+  moves at 10 % (or one rupee), so an overnight drop bigger than 1.5× that cap can
+  only be a corporate action. Those gaps are detected and the older history is
+  rescaled, giving Lucky a true high near 530. Small bonuses under the cap are not
+  caught and make a stock look slightly further from its high than it really is.
+- **History depth:** SCSTrade supplies the full daily history in one call, from
+  2006 for older companies and from listing for newer ones. The portal is the
+  fallback, one month per call; stocks whose history came only from the portal are
+  marked `†` in the message because their high may be understated.
+- **Schedule:** **18:00 PKT Monday to Friday**, after the close and the portal's
+  end-of-day publish. On a market holiday you get a one-line "market closed" note.
+  Manual run: Actions → **PSX ATH Zone Scan** → Run workflow.
+
+What the message looks like:
+
+```
+📈 PSX ATH Zone — 07 Sep 2026 (session 07 Sep)
+Rule: 0–40% below all-time high (split/bonus-adjusted) · all PSX equities
+
+In zone: 163 (4 new)
+🆕 OGDC 328.80 · ▼6.6% · ATH 352.00 (6 Jul 26)
+• MEBL 565.46 · ▼6.5% · ATH 605.00 (11 Aug 26) · 21d
+• LUCK 433.12 · ▼18.2% · ATH 529.50 (22 Dec 25) · 21d
+...
+
+↩️ Left the zone: AIRLINK (▼42%), XYZ (no trade since 25 Aug 26)
+
+Coverage: 705 equities · 690 with history · 560 active · 497 traded this session · 163 in zone
+```
+
+New entrants come first, then closest-to-high first. The number of days at the
+end is how long the stock has been in the zone. Long lists are split across
+several Telegram messages automatically.
+
+**First run and history cache.** The per-stock adjusted high lives in
+`psx_ath_cache.json`, committed to the repo, and is rolled forward each session
+from the portal's market-watch page in a single call. The initial history load
+was done once and shipped with the repo. If a new stock lists, or the cache is
+ever deleted, the scanner backfills up to 400 stocks per run within a 40-minute
+budget and says in the message how many are still pending.
+
+Files the PSX Action commits back: `psx_ath_cache.json`, `psx_state.json`
+(stocks in the zone and first-seen dates), `psx_alerts_archive.txt`,
+`psx_matches.jsonl`.
+
+PSX tuning knobs (environment variables, same mechanism as the crypto table
+below): `PSX_ATH_DD_MIN` (0), `PSX_ATH_DD_MAX` (40), `PSX_MAX_STALE_DAYS` (10),
+`PSX_BACKFILL_LIMIT` (400), `PSX_BACKFILL_BUDGET` seconds (2400),
+`PSX_PORTAL_MONTHS` (24). `DRY_RUN=1` prints the message and sends nothing; the
+history cache is still saved so a backfill run is never wasted.
+
+---
+
 ## Setup (one time, ~15 minutes)
 
 ### Step 1 — Create the Telegram bot
@@ -73,9 +145,10 @@ chat ID — both scanners will post into the same chat.)
 ### Step 2 — Create the GitHub repo
 1. Create a new **private** repository on github.com (e.g. `ath-zone-scanner`).
 2. Push this folder to it, keeping the structure:
-   - `scanner.py`
+   - `scanner.py` and `psx_scanner.py`
+   - `psx_ath_cache.json` (the PSX history cache)
    - `requirements.txt`
-   - `.github/workflows/scan.yml`
+   - `.github/workflows/scan.yml` and `.github/workflows/psx_scan.yml`
 
    ```bash
    git init
@@ -111,7 +184,11 @@ Repo → **Actions** tab → **ATH Zone Scan** → **Run workflow**. Leave *dry 
 unticked to get a real Telegram message, or tick it to only see the message in
 the job log without sending or committing anything.
 
-Done. It now runs every day at 00:15 UTC and messages you the results.
+For PSX, run **PSX ATH Zone Scan** the same way. It uses the same two Telegram
+secrets and needs nothing else.
+
+Done. Crypto runs every day at 00:15 UTC, PSX every weekday at 18:00 PKT, and
+each messages you its results.
 
 ---
 
@@ -141,6 +218,7 @@ pip install -r requirements.txt
 
 # Dry run: prints the message, touches nothing
 DRY_RUN=1 python scanner.py                       # PowerShell: $env:DRY_RUN="1"; python scanner.py
+DRY_RUN=1 python psx_scanner.py                   # PSX (the history cache is still saved)
 
 # Real run (sends Telegram, writes state.json / alerts_archive.txt / matches.jsonl)
 export TELEGRAM_BOT_TOKEN=...                     # PowerShell: $env:TELEGRAM_BOT_TOKEN="..."

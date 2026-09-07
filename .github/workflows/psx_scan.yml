@@ -1,0 +1,54 @@
+name: PSX ATH Zone Scan
+
+on:
+  schedule:
+    - cron: "0 13 * * 1-5"   # 18:00 PKT Mon–Fri (PSX closes 15:30 Mon–Thu / 16:30 Fri; portal EOD ~16:00 PKT)
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run — print the message in the job log, send nothing (history cache is still saved)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+# Same group as the crypto workflow so the two commit-backs never race.
+concurrency:
+  group: ath-zone-scan
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75       # first runs backfill history (≤40 min budget); normal runs take ~2 min
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run PSX scanner
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          DRY_RUN: ${{ inputs.dry_run == true && '1' || '0' }}
+        run: python psx_scanner.py
+
+      - name: Commit PSX cache, state, archive and matches log
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          for f in psx_ath_cache.json psx_state.json psx_alerts_archive.txt psx_matches.jsonl; do
+            [ -f "$f" ] && git add "$f"
+          done
+          if git diff --cached --quiet; then
+            echo "Nothing to commit."
+          else
+            git commit -m "chore: PSX ATH scan — update cache + state [skip ci]"
+            git push || (git pull --rebase && git push)
+          fi
