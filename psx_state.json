@@ -1,5 +1,5 @@
 {
-"updated":"2026-09-08T16:54:08+00:00",
+"updated":"2026-09-09T16:56:18+00:00",
 "zone":{
 "AABS":{
 "first_seen":"2026-09-07"
@@ -67,8 +67,8 @@
 "ASIC":{
 "first_seen":"2026-09-07"
 },
-"ASTM":{
-"first_seen":"2026-09-07"
+"ASL":{
+"first_seen":"2026-09-09"
 },
 "ATIL":{
 "first_seen":"2026-09-07"
@@ -89,9 +89,6 @@
 "first_seen":"2026-09-07"
 },
 "BFAGRO":{
-"first_seen":"2026-09-07"
-},
-"BFMOD":{
 "first_seen":"2026-09-07"
 },
 "BOK":{
@@ -160,6 +157,9 @@
 "EFERT":{
 "first_seen":"2026-09-07"
 },
+"ELCM":{
+"first_seen":"2026-09-09"
+},
 "ELSM":{
 "first_seen":"2026-09-07"
 },
@@ -217,16 +217,10 @@
 "FRCL":{
 "first_seen":"2026-09-07"
 },
-"FTSM":{
-"first_seen":"2026-09-07"
-},
 "GAL":{
 "first_seen":"2026-09-07"
 },
 "GCIL":{
-"first_seen":"2026-09-07"
-},
-"GCWL":{
 "first_seen":"2026-09-07"
 },
 "GEMBCEM":{
@@ -310,9 +304,6 @@
 "ICL":{
 "first_seen":"2026-09-07"
 },
-"IGIHL":{
-"first_seen":"2026-09-07"
-},
 "ILP":{
 "first_seen":"2026-09-07"
 },
@@ -340,6 +331,9 @@
 "ITANZ":{
 "first_seen":"2026-09-07"
 },
+"JDMT":{
+"first_seen":"2026-09-09"
+},
 "JDWS":{
 "first_seen":"2026-09-07"
 },
@@ -357,6 +351,9 @@
 },
 "JVDC":{
 "first_seen":"2026-09-07"
+},
+"KCL":{
+"first_seen":"2026-09-09"
 },
 "KEL":{
 "first_seen":"2026-09-07"
@@ -412,6 +409,9 @@
 "MTL":{
 "first_seen":"2026-09-07"
 },
+"MUGHAL":{
+"first_seen":"2026-09-09"
+},
 "MUGHALC":{
 "first_seen":"2026-09-07"
 },
@@ -444,6 +444,9 @@
 },
 "NPL":{
 "first_seen":"2026-09-07"
+},
+"NRL":{
+"first_seen":"2026-09-09"
 },
 "NRSL":{
 "first_seen":"2026-09-07"
@@ -481,9 +484,6 @@
 "PIM":{
 "first_seen":"2026-09-07"
 },
-"PIOC":{
-"first_seen":"2026-09-08"
-},
 "PKGI":{
 "first_seen":"2026-09-07"
 },
@@ -506,9 +506,6 @@
 "first_seen":"2026-09-07"
 },
 "PQGTL":{
-"first_seen":"2026-09-07"
-},
-"PRET":{
 "first_seen":"2026-09-07"
 },
 "PRL":{
@@ -545,9 +542,6 @@
 "first_seen":"2026-09-07"
 },
 "RMPL":{
-"first_seen":"2026-09-07"
-},
-"RUBY":{
 "first_seen":"2026-09-07"
 },
 "SAIF":{
@@ -633,6 +627,9 @@
 },
 "STYLERS":{
 "first_seen":"2026-09-07"
+},
+"SUHJ":{
+"first_seen":"2026-09-09"
 },
 "SURC":{
 "first_seen":"2026-09-07"
