@@ -1,5 +1,5 @@
 {
-"updated":"2026-09-10T16:44:59+00:00",
+"updated":"2026-09-11T16:49:01+00:00",
 "zone":{
 "AABS":{
 "first_seen":"2026-09-07"
@@ -78,6 +78,9 @@
 },
 "BAHL":{
 "first_seen":"2026-09-07"
+},
+"BAPL":{
+"first_seen":"2026-09-11"
 },
 "BFAGRO":{
 "first_seen":"2026-09-07"
@@ -199,6 +202,9 @@
 "FIL":{
 "first_seen":"2026-09-07"
 },
+"FLYNG":{
+"first_seen":"2026-09-11"
+},
 "FPJM":{
 "first_seen":"2026-09-07"
 },
@@ -224,9 +230,6 @@
 "first_seen":"2026-09-07"
 },
 "GFIL":{
-"first_seen":"2026-09-07"
-},
-"GHGL":{
 "first_seen":"2026-09-07"
 },
 "GHNI":{
@@ -283,9 +286,6 @@
 "HUSI":{
 "first_seen":"2026-09-07"
 },
-"IBFL":{
-"first_seen":"2026-09-07"
-},
 "ICCI":{
 "first_seen":"2026-09-07"
 },
@@ -295,11 +295,17 @@
 "ICL":{
 "first_seen":"2026-09-07"
 },
+"IGIHL":{
+"first_seen":"2026-09-11"
+},
 "ILP":{
 "first_seen":"2026-09-07"
 },
 "IMAGE":{
 "first_seen":"2026-09-07"
+},
+"IMS":{
+"first_seen":"2026-09-11"
 },
 "INDU":{
 "first_seen":"2026-09-07"
@@ -433,6 +439,9 @@
 "NPL":{
 "first_seen":"2026-09-07"
 },
+"NRL":{
+"first_seen":"2026-09-11"
+},
 "NRSL":{
 "first_seen":"2026-09-07"
 },
@@ -559,6 +568,9 @@
 "SHCM":{
 "first_seen":"2026-09-10"
 },
+"SHDT":{
+"first_seen":"2026-09-11"
+},
 "SHFA":{
 "first_seen":"2026-09-07"
 },
@@ -603,9 +615,6 @@
 },
 "STYLERS":{
 "first_seen":"2026-09-07"
-},
-"SUHJ":{
-"first_seen":"2026-09-09"
 },
 "SURC":{
 "first_seen":"2026-09-07"
