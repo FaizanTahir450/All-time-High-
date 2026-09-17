@@ -1,5 +1,5 @@
 {
-"updated":"2026-09-16T17:22:44+00:00",
+"updated":"2026-09-17T17:21:49+00:00",
 "zone":{
 "AABS":{
 "first_seen":"2026-09-07"
@@ -85,6 +85,9 @@
 "BFAGRO":{
 "first_seen":"2026-09-07"
 },
+"BOK":{
+"first_seen":"2026-09-17"
+},
 "BRRG":{
 "first_seen":"2026-09-07"
 },
@@ -102,6 +105,9 @@
 },
 "CHCC":{
 "first_seen":"2026-09-07"
+},
+"CLVL":{
+"first_seen":"2026-09-17"
 },
 "COLG":{
 "first_seen":"2026-09-07"
@@ -298,6 +304,9 @@
 "ISIL":{
 "first_seen":"2026-09-07"
 },
+"ITANZ":{
+"first_seen":"2026-09-17"
+},
 "JDMT":{
 "first_seen":"2026-09-09"
 },
@@ -325,6 +334,9 @@
 "KCL":{
 "first_seen":"2026-09-09"
 },
+"KEL":{
+"first_seen":"2026-09-17"
+},
 "KOHC":{
 "first_seen":"2026-09-07"
 },
@@ -342,6 +354,9 @@
 },
 "LSECL":{
 "first_seen":"2026-09-07"
+},
+"LSEFSL":{
+"first_seen":"2026-09-17"
 },
 "LSEVL":{
 "first_seen":"2026-09-07"
@@ -403,6 +418,9 @@
 "NML":{
 "first_seen":"2026-09-07"
 },
+"NNAR":{
+"first_seen":"2026-09-17"
+},
 "NPL":{
 "first_seen":"2026-09-07"
 },
@@ -433,8 +451,8 @@
 "PAKOXY":{
 "first_seen":"2026-09-07"
 },
-"PECO":{
-"first_seen":"2026-09-07"
+"PASM":{
+"first_seen":"2026-09-17"
 },
 "PIM":{
 "first_seen":"2026-09-07"
@@ -525,6 +543,9 @@
 },
 "SGF":{
 "first_seen":"2026-09-07"
+},
+"SGPL":{
+"first_seen":"2026-09-17"
 },
 "SHFA":{
 "first_seen":"2026-09-07"
@@ -624,9 +645,6 @@
 },
 "WAHDAT":{
 "first_seen":"2026-09-07"
-},
-"WAHN":{
-"first_seen":"2026-09-16"
 },
 "WASL":{
 "first_seen":"2026-09-07"
