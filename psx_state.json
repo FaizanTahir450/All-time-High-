@@ -1,5 +1,5 @@
 {
-"updated":"2026-09-17T17:21:49+00:00",
+"updated":"2026-09-18T16:47:36+00:00",
 "zone":{
 "AABS":{
 "first_seen":"2026-09-07"
@@ -51,6 +51,9 @@
 },
 "APL":{
 "first_seen":"2026-09-07"
+},
+"ARCTM":{
+"first_seen":"2026-09-18"
 },
 "ARMG":{
 "first_seen":"2026-09-07"
@@ -190,6 +193,9 @@
 "FHAM":{
 "first_seen":"2026-09-07"
 },
+"FIBLM":{
+"first_seen":"2026-09-18"
+},
 "FPJM":{
 "first_seen":"2026-09-07"
 },
@@ -198,6 +204,9 @@
 },
 "FRCL":{
 "first_seen":"2026-09-07"
+},
+"FTSM":{
+"first_seen":"2026-09-18"
 },
 "GAL":{
 "first_seen":"2026-09-07"
@@ -239,9 +248,6 @@
 "first_seen":"2026-09-07"
 },
 "HABSM":{
-"first_seen":"2026-09-07"
-},
-"HAEL":{
 "first_seen":"2026-09-07"
 },
 "HAFL":{
@@ -288,6 +294,9 @@
 },
 "IMAGE":{
 "first_seen":"2026-09-07"
+},
+"IMS":{
+"first_seen":"2026-09-18"
 },
 "INDU":{
 "first_seen":"2026-09-07"
@@ -406,6 +415,9 @@
 "NBP":{
 "first_seen":"2026-09-07"
 },
+"NCL":{
+"first_seen":"2026-09-18"
+},
 "NCML":{
 "first_seen":"2026-09-07"
 },
@@ -473,9 +485,6 @@
 "first_seen":"2026-09-07"
 },
 "PPL":{
-"first_seen":"2026-09-07"
-},
-"PPVC":{
 "first_seen":"2026-09-07"
 },
 "PQGTL":{
@@ -546,6 +555,9 @@
 },
 "SGPL":{
 "first_seen":"2026-09-17"
+},
+"SHDT":{
+"first_seen":"2026-09-18"
 },
 "SHFA":{
 "first_seen":"2026-09-07"
@@ -646,8 +658,14 @@
 "WAHDAT":{
 "first_seen":"2026-09-07"
 },
+"WAHN":{
+"first_seen":"2026-09-18"
+},
 "WASL":{
 "first_seen":"2026-09-07"
+},
+"ZTL":{
+"first_seen":"2026-09-18"
 },
 "ZUMA":{
 "first_seen":"2026-09-07"
