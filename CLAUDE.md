@@ -50,8 +50,9 @@ which Binance lists, but other exchanges (Bybit, Gate) do list xStocks.
 | `matches.jsonl` | One line per (run, exchange, coin): price, ath, ath_date, dd_pct, mcap, mcap_rank, locked_pct, circulating, supply_base, volume_24h, pair, first_seen, new. |
 | `README.md` | End-user setup guide (Telegram bot, GitHub secrets/variables, manual run, tuning) for both scanners. |
 | `psx_scanner.py` | PSX scanner (see the PSX section below). Imports `send_telegram`, `append_archive`, `fmt_ath_date` from `scanner`. |
-| `.github/workflows/psx_scan.yml` | Cron `0 13 * * 1-5` (18:00 PKT Mon–Fri) + manual `dry_run`; commits `psx_ath_cache.json`, `psx_state.json`, `psx_alerts_archive.txt`, `psx_matches.jsonl`. `timeout-minutes: 75` for backfill runs. |
+| `.github/workflows/psx_scan.yml` | Cron `0 13 * * 1-5` (18:00 PKT Mon–Fri) + manual `dry_run`; commits `psx_ath_cache.json`, `psx_universe.json`, `psx_state.json`, `psx_alerts_archive.txt`, `psx_matches.jsonl`. `timeout-minutes: 75` (normal run ~5 min + ≤30 min session wait + ≤40 min backfill). |
 | `psx_ath_cache.json` | Committed per-symbol adjusted-ATH cache (~705 entries). Rolled forward each session; rebuilt automatically if deleted. |
+| `psx_universe.json` | Committed `{updated, count, symbols: {SYM: name}}` — every PSX equity ever seen. Seeded 2026-10-01 from the portal's last symbol list (May-2026 snapshot + the Sep-2026 cache) ∪ TradingView; grows each run, never shrinks. |
 
 ## Data flow (`main()`)
 
@@ -118,35 +119,52 @@ Owner's brief (2026-09-07): "do it simple for PSX stock, just the 0 to 40 % rule
 of all-time high, but make sure maximum coverage." So: **one rule**, last close
 `0 ≤ dd ≤ 40` % below the **split/bonus-adjusted all-time high**, over **every
 listed PSX equity**. No market-cap, float or liquidity filter. Only exclusions:
-debt/ETF/rights/pref instruments (`get_equities`), stocks with no trade in
+debt/ETF/rights/pref instruments (portal flags + `_NON_EQUITY` name regex when the
+portal answers; `is_share_class()` drops `…PS/…CPS/…PRS/…R` tickers whose base
+company is listed, e.g. ASLPS, GCWLPRS, GCWLR), stocks with no trade in
 `PSX_MAX_STALE_DAYS`=10 days (held out, not dropped), and dead listings with no
-price data anywhere (cached as `nodata`, re-checked monthly).
+price data anywhere (cached as `nodata`, re-checked every `PSX_RECHECK_DAYS`).
 
-### Data sources
+### Data sources — portal outage (2026-09-15 →)
+
+The official portal `dps.psx.com.pk` answers `/symbols`, `/market-watch`,
+`/timeseries/eod/*` and `POST /historical` with a branded **HTML 404** for
+everyone (HTML pages such as `/company/OGDC` still work). The PSX workflow failed
+every weekday from 2026-09-24 until the 2026-10-01 rewrite. The owner rejects
+Yahoo for PSX (dividend-adjusted prices drift from exchange prints; ~1 in 8
+symbols missing). `portal_symbols()` still probes `/symbols` once per run (15 s
+timeout, must be JSON) so the portal rejoins the universe merge if it returns;
+nothing else depends on it.
 
 | Need | Source | Notes |
 |------|--------|-------|
-| Universe | portal `GET /symbols` | JSON; `isDebt`/`isETF` flags + `_NON_EQUITY` name regex → ~705 equities |
-| Full history | SCSTrade `POST /stockscreening/SS_CompanySnapShotHP.aspx/chart` `{par, date1, date2}` | whole history in one call, newest-first, `/Date(ms)/` stamps (PKT). From 2006-01-02 for old companies. ~2 s/symbol; can hang minutes or fail DNS → `timeout=(15,60)` + portal fallback |
-| Fallback history | portal `POST /historical {month, year, symbol}` | HTML table, one month/call; `portal_history` walks back ≤24 months, stops after 3 empty months. Marks entry `partial` (shown as `†`) |
-| Daily bar | portal `GET /market-watch` | one HTML table for every stock that traded: LDCP, OPEN, HIGH, LOW, CURRENT, VOLUME. **Live intraday during market hours.** On ex-dividend / ex-bonus / ex-rights days and for non-compliant companies the ticker carries a suffix (`ABLXD`, `XB`, `XR`, `AMTEXNC`); `_base_symbol()` maps these back to the equity so the bar (and the XB-day adjustment) is not lost. ETF/pref/debt rows are dropped |
-| Session date | `portal_month` of a bellwether (OGDC/MEBL/HUBC/PSO) | newest row = latest session; today's row appears intraday |
+| Prices (history + daily) | SCS Trade `POST /stockscreening/SS_CompanySnapShotHP.aspx/chart` `{par, date1 "MM/DD/YYYY", date2}` | raw exchange OHLCV, any span in one call, `/Date(ms)/` stamps (PKT midnight). From 2006-01-02 for old companies. ~0.2–1 s/call; `scs_history()` retries 3× on transport/5xx/bad JSON, `timeout=(15,60)`. HTTP 200 with empty `d` = symbol has no prices (→ `nodata`). Verified 2026-10-01 identical to TradingView for 12 symbols |
+| Fallback daily bar + universe | TradingView `POST https://scanner.tradingview.com/pakistan/scan` (columns `name, description, type, subtype, time, open, high, low, close, volume, change`; filter `type == stock`) | one call, 481 `common` stocks, 15-min delayed. `time` = the latest bar's open (UTC; PKT date = session). `prev_close = close/(1+change%)` is passed to `apply_bar` as `ldcp` (on ex-dates TradingView's reference is the adjusted previous close). Also the only source of new listings and names now |
+| Session date | `scs_bellwether_date()` (OGDC/MEBL/HUBC/PSO, last 14 days) → `tv_session_date()` (most common TradingView bar date, ≥50 rows) | see `latest_session_date()` below |
 
-### Forming-session guards (mirror sweep-scanner)
+### Forming-session guards and the session wait
 
 `SESSION_CUTOFF` 16:45 PKT. Before it, `drop_forming()` strips today's rows from
-every history fetch and `latest_session_date()` returns the previous session;
-`market_live_now()` (weekday 09:00–16:45 PKT) disables market-watch entirely
-because it is intraday. The scheduled run is 13:00 UTC = 18:00 PKT, so guards only
-matter for manual/local runs. Holiday: weekday after cutoff with `sess < today` →
-one-line note, state untouched.
+every SCS Trade fetch and `tradingview_scan()` drops a bar dated today. The
+scheduled run is 13:00 UTC = 18:00 PKT, so guards only matter for manual/local
+runs. `latest_session_date(tv_bars)` returns `(date, source)`: SCS Trade is
+authoritative; on a weekday after the cutoff, if SCS Trade lacks today's bar but
+TradingView has it, the run polls SCS Trade every `SESSION_POLL`=300 s up to
+`PSX_SESSION_WAIT`=1800 s and then falls back to TradingView (`source ==
+"tradingview"` → `roll_forward(scs_ok=False)` uses TradingView bars for every
+symbol). If TradingView has no newer session either, it is a holiday — no wait.
+`(None, None)` = both down → ⚠️ note. Holiday: weekday after cutoff with
+`sess < today` → one-line note, state untouched. Outage guard: if more than
+`PSX_MAX_FAIL_RATIO` (25 %) of the refreshed symbols failed (≥20 tried) the run
+sends a ⚠️ note and keeps the previous zone state.
 
 ### Corporate-action adjustment (`is_corp_action`, `adjusted_ath`, `apply_bar`)
 
 PSX daily limit is ±10 % or Re 1, whichever is larger. An overnight **drop**
 `prev_close − ref > 1.5 × limit` (ref = open, else close; in `apply_bar` the
-market-watch LDCP is preferred when it differs from the cached close by >1 %,
-because PSX publishes the adjusted reference price on ex-dates) is treated as a
+`ldcp` argument — TradingView's implied previous close on the fallback path —
+is preferred when it differs from the cached close by >1 %, because on ex-dates
+it is the adjusted reference price; SCS Trade bars pass no `ldcp`) is treated as a
 bonus/split/rights and the ratio `ref/prev_close` rescales all OLDER bars
 (`adjusted_ath` walks newest→oldest with a cumulative factor). Upward gaps are
 ignored. Verified 2026-09-07: LUCK raw ATH 1,796 → adjusted 529.50 (2025-12-22,
@@ -158,17 +176,23 @@ unless the ATH predates 2009).
 ### Cache & run flow (`main`)
 
 `psx_ath_cache.json` = `{"symbols": {SYM: {last_date, last_close, ath, ath_date,
-hist_start, bars, events[≤8], source, partial} | {nodata, checked}},
-"last_run_session"}`. Per run: (1) backfill uncached symbols, ≤`PSX_BACKFILL_LIMIT`
-within `PSX_BACKFILL_BUDGET` s, saving every 25 (transient errors leave the symbol
-uncached for retry; only "both sources empty" becomes `nodata`); (2) roll cached
-symbols to `sess`: if the previous run's session is >3 days old (a run was
-skipped) → `catch_up()` via SCSTrade from `last_date`, else apply the
-market-watch bar; (3) evaluate, sort new-first then dd ascending, diff against
+hist_start, bars, events[≤8], source, partial, checked?} | {nodata, checked}},
+"last_run_session"}`. Per run: (0) universe = `psx_universe.json` ∪ portal (if
+alive) ∪ TradingView, saved when it changed; `tradingview_scan()` also returns
+the fallback bars; (1) backfill uncached symbols, ≤`PSX_BACKFILL_LIMIT` within
+`PSX_BACKFILL_BUDGET` s, saving every 25 (transport errors leave the symbol
+uncached for retry; an empty SCS Trade answer becomes `nodata`); (2)
+`roll_forward()`: every cached symbol with `last_date < sess` gets a `catch_up()`
+(SCS Trade from `last_date − 3 d`, applies only newer bars, so missed sessions
+and double runs are both safe); on a per-symbol SCS failure the TradingView bar
+for `sess` is applied instead; symbols idle for more than `PSX_ROLL_WINDOW_DAYS`
+(45) are re-probed only every `PSX_RECHECK_DAYS` (30) via the entry's `checked`
+date; (3) evaluate, sort new-first then dd ascending, diff against
 `psx_state.json` for 🆕/left; (4) Telegram → `psx_alerts_archive.txt` →
 `psx_matches.jsonl` → state. `DRY_RUN=1` skips Telegram/state/archive/log but
-**does save the cache** (so local backfills count). Initial cache was built
-locally on 2026-09-07 (~2 s/symbol, 705 symbols) and committed.
+**does save the cache and universe** (so local backfills count). Initial cache
+was built locally on 2026-09-07 (705 symbols) and committed; the 2026-10-01
+local dry run caught the cache up from 23 Sep to 1 Oct via SCS Trade.
 
 ### Local testing
 

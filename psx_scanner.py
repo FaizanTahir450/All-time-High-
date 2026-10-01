@@ -13,15 +13,28 @@ corporate action: the scanner detects those gaps and rescales the older history
 (see is_corp_action / adjusted_ath). Small bonuses under the cap slip through and
 make a stock look slightly further from its high than it is.
 
-Data (all free, no keys):
-  * Universe   — PSX Data Portal /symbols (equities only: no debt, ETFs, rights, prefs)
-  * History    — SCSTrade chart API, whole history in one call (mostly from 2006);
-                 portal /historical (one month per call) is the fallback
-  * Daily bar  — portal /market-watch: OHLC + previous close for every traded stock, one call
-  * Session    — portal /historical for a bellwether symbol tells the latest session date
+Data (all free, no keys). The official PSX Data Portal (dps.psx.com.pk) stopped
+serving its data routes (/symbols, /market-watch, POST /historical all answer an
+HTML 404) around 2026-09-15, so the scanner now runs on:
+  * Prices    — SCS Trade chart API: raw exchange OHLCV, whole history in one
+                call (mostly from 2006) and the same call for the daily catch-up.
+                Verified identical to the exchange prints / TradingView.
+  * Fallback  — TradingView's PSX screener: one call returns every listed common
+                stock with its latest session bar (date, OHLCV, change %). Used
+                for the daily bar when SCS Trade is down or late, and for the
+                session date when SCS Trade has none.
+  * Universe  — committed psx_universe.json (seeded from the portal's last symbol
+                list), merged every run with TradingView's stock list and, if the
+                portal ever answers again, with portal /symbols. Symbols are only
+                ever added; preference/rights classes of a listed company
+                (ASLPS, GCWLPRS, GCWLR) are dropped.
+  * Session   — the last SCS Trade bar of a bellwether (OGDC/MEBL/HUBC/PSO). On a
+                weekday after the close the run waits up to PSX_SESSION_WAIT for
+                the EOD bar to be published before calling the day a holiday.
 
 Files (committed back by the Action):
   psx_ath_cache.json     per-symbol running adjusted ATH, last close/date, corp-action events
+  psx_universe.json      {symbol: name} — every equity ever seen, grows automatically
   psx_state.json         stocks currently in the zone + first-seen date (drives 🆕)
   psx_alerts_archive.txt copy of every Telegram message
   psx_matches.jsonl      one JSON line per (session, stock) in zone
@@ -31,11 +44,12 @@ PSX_BACKFILL_BUDGET seconds, resumable, cache saved every 25 symbols. Until the
 backfill is complete the message shows how many stocks are still pending.
 
 Env: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID (required unless DRY_RUN=1);
-PSX_ATH_DD_MIN, PSX_ATH_DD_MAX, PSX_MAX_STALE_DAYS, PSX_BACKFILL_LIMIT,
-PSX_BACKFILL_BUDGET, PSX_PORTAL_MONTHS, PSX_REQUEST_PAUSE, PSX_CACHE_FILE,
+PSX_ATH_DD_MIN, PSX_ATH_DD_MAX, PSX_MAX_STALE_DAYS, PSX_ROLL_WINDOW_DAYS,
+PSX_RECHECK_DAYS, PSX_SESSION_WAIT, PSX_MAX_FAIL_RATIO, PSX_BACKFILL_LIMIT,
+PSX_BACKFILL_BUDGET, PSX_REQUEST_PAUSE, PSX_CACHE_FILE, PSX_UNIVERSE_FILE,
 PSX_STATE_FILE, PSX_ALERTS_ARCHIVE, PSX_MATCHES_LOG, DRY_RUN (optional).
 DRY_RUN=1 sends nothing and leaves state/archive/log untouched, but the history
-cache IS saved so a backfill run is never wasted.
+cache and universe ARE saved so a backfill run is never wasted.
 """
 
 import os
@@ -43,10 +57,11 @@ import re
 import sys
 import json
 import time
+import collections
 from datetime import datetime, date, timedelta, timezone
+from datetime import time as dtime
 
 import requests
-from datetime import time as dtime
 
 import scanner as core          # shared Telegram / formatting helpers (same repo)
 
@@ -61,32 +76,38 @@ def _env(name, default):
 
 
 # ── Rule & runtime config ──────────────────────────────────────────
-ATH_DD_MIN      = float(_env("PSX_ATH_DD_MIN", "0"))       # % below ATH, lower bound
-ATH_DD_MAX      = float(_env("PSX_ATH_DD_MAX", "40"))      # % below ATH, upper bound
-MAX_STALE_DAYS  = int(_env("PSX_MAX_STALE_DAYS", "10"))    # stock must have traded within N calendar days
-BACKFILL_LIMIT  = int(_env("PSX_BACKFILL_LIMIT", "400"))   # symbols to backfill per run
-BACKFILL_BUDGET = float(_env("PSX_BACKFILL_BUDGET", "2400"))  # seconds of backfill per run (40 min)
-PORTAL_MONTHS   = int(_env("PSX_PORTAL_MONTHS", "24"))     # portal fallback depth when SCSTrade has nothing
-REQUEST_PAUSE   = float(_env("PSX_REQUEST_PAUSE", "0.3"))  # s between history requests
-GAP_LIMIT_MULT  = 1.5                                      # gap > 1.5× the daily limit ⇒ corporate action
-DRY_RUN         = _env("DRY_RUN", "0") == "1"
+ATH_DD_MIN       = float(_env("PSX_ATH_DD_MIN", "0"))        # % below ATH, lower bound
+ATH_DD_MAX       = float(_env("PSX_ATH_DD_MAX", "40"))       # % below ATH, upper bound
+MAX_STALE_DAYS   = int(_env("PSX_MAX_STALE_DAYS", "10"))     # stock must have traded within N calendar days
+ROLL_WINDOW_DAYS = int(_env("PSX_ROLL_WINDOW_DAYS", "45"))   # traded within N days → refreshed every run
+RECHECK_DAYS     = int(_env("PSX_RECHECK_DAYS", "30"))       # dormant / no-data symbols re-probed every N days
+SESSION_WAIT     = float(_env("PSX_SESSION_WAIT", "1800"))   # s to wait for today's EOD bar on a trading day
+SESSION_POLL     = 300                                       # s between session probes while waiting
+MAX_FAIL_RATIO   = float(_env("PSX_MAX_FAIL_RATIO", "0.25")) # > this share of refresh failures ⇒ source outage
+BACKFILL_LIMIT   = int(_env("PSX_BACKFILL_LIMIT", "400"))    # symbols to backfill per run
+BACKFILL_BUDGET  = float(_env("PSX_BACKFILL_BUDGET", "2400"))  # seconds of backfill per run (40 min)
+REQUEST_PAUSE    = float(_env("PSX_REQUEST_PAUSE", "0.2"))   # s between SCS Trade requests
+GAP_LIMIT_MULT   = 1.5                                       # gap > 1.5× the daily limit ⇒ corporate action
+DRY_RUN          = _env("DRY_RUN", "0") == "1"
 
-CACHE_FILE  = _env("PSX_CACHE_FILE", "psx_ath_cache.json")
-STATE_FILE  = _env("PSX_STATE_FILE", "psx_state.json")
-ARCHIVE     = _env("PSX_ALERTS_ARCHIVE", "psx_alerts_archive.txt")
-MATCHES_LOG = _env("PSX_MATCHES_LOG", "psx_matches.jsonl")
+CACHE_FILE    = _env("PSX_CACHE_FILE", "psx_ath_cache.json")
+UNIVERSE_FILE = _env("PSX_UNIVERSE_FILE", "psx_universe.json")
+STATE_FILE    = _env("PSX_STATE_FILE", "psx_state.json")
+ARCHIVE       = _env("PSX_ALERTS_ARCHIVE", "psx_alerts_archive.txt")
+MATCHES_LOG   = _env("PSX_MATCHES_LOG", "psx_matches.jsonl")
 
-PSX_BASE = "https://dps.psx.com.pk"
+PSX_BASE = "https://dps.psx.com.pk"                          # data routes dead since ~2026-09-15; probed once per run
 SCS_BASE = "https://www.scstrade.com"
+TV_SCAN  = "https://scanner.tradingview.com/pakistan/scan"
 PKT = timezone(timedelta(hours=5))
 BELLWETHERS = ("OGDC", "MEBL", "HUBC", "PSO")             # any of these trades every session
-SESSION_CUTOFF = dtime(16, 45)      # PKT: before this, today's bar on the portal is still forming
-MARKET_OPEN    = dtime(9, 0)        # PKT: market-watch shows LIVE intraday prices between open and cutoff
+SESSION_CUTOFF = dtime(16, 45)      # PKT: before this, today's bar may still be forming → dropped
 
-_NON_EQUITY = re.compile(r"\((?:r\d*|right|prs|ptc|[^)]*pref[^)]*)\)", re.I)   # rights / preference share tags
-_TR = re.compile(r"<tr[^>]*>(.*?)</tr>", re.S)
-_TD = re.compile(r"<t[dh][^>]*>(.*?)</t[dh]>", re.S)
-_TAG = re.compile(r"<[^>]+>")
+_NON_EQUITY = re.compile(r"\((?:r\d*|right|prs|ptc|[^)]*pref[^)]*)\)", re.I)   # portal name tags: rights / prefs
+_SHARE_CLASS_SUFFIXES = ("CPS", "PRS", "PS", "R")   # preference / rights tickers of a listed company (ASLPS, GCWLR)
+
+TV_COLUMNS = ["name", "description", "type", "subtype", "time",
+              "open", "high", "low", "close", "volume", "change"]
 
 session = requests.Session()
 session.headers.update({"User-Agent": "Mozilla/5.0 (psx-ath-scanner)"})
@@ -97,145 +118,211 @@ def now_pkt():
 
 
 def session_closed_now():
-    """True once today's session is final on the portal (after SESSION_CUTOFF PKT)."""
+    """True once today's session is final (after SESSION_CUTOFF PKT)."""
     return now_pkt().time() >= SESSION_CUTOFF
 
 
-def market_live_now():
-    """True on a weekday between the open and the cutoff — market-watch is intraday, not a closed bar."""
-    now = now_pkt()
-    return now.weekday() < 5 and MARKET_OPEN <= now.time() < SESSION_CUTOFF
-
-
 def drop_forming(rows):
-    """Remove today's bar from a history list while today's session is still forming."""
+    """Remove today's bar from a history list while today's session may still be forming."""
     if session_closed_now():
         return rows
     today = now_pkt().date().isoformat()
     return [r for r in rows if r[0] < today]
 
 
-def _num(s):
-    s = (s or "").replace(",", "").strip()
+def _ms_to_pkt_date(ms):
+    return datetime.fromtimestamp(ms / 1000, tz=timezone.utc).astimezone(PKT).date().isoformat()
+
+
+# ── SCS Trade (price source) ───────────────────────────────────────
+def scs_history(sym, start="01/01/1990", tries=3):
+    """Daily bars from `start` (MM/DD/YYYY) to tomorrow -> ascending rows (date, o, h, l, c, v).
+
+    Raw exchange prices, one call for any span. Empty list = SCS Trade answered and
+    has no prices for the symbol. Transport / 5xx / bad-JSON errors are retried
+    `tries` times and then raised.
+    """
+    end = (now_pkt() + timedelta(days=1)).strftime("%m/%d/%Y")
+    err = None
+    for attempt in range(tries):
+        try:
+            r = session.post(f"{SCS_BASE}/stockscreening/SS_CompanySnapShotHP.aspx/chart",
+                             json={"par": sym, "date1": start, "date2": end},
+                             headers={"Content-Type": "application/json"}, timeout=(15, 60))
+            if r.status_code == 429 or r.status_code >= 500:
+                raise requests.HTTPError(f"HTTP {r.status_code}", response=r)
+            r.raise_for_status()
+            data = r.json().get("d") or []
+            break
+        except (requests.RequestException, ValueError) as e:
+            err = e
+            if attempt < tries - 1:
+                time.sleep(2.0 * (attempt + 1))
+    else:
+        raise err
+    rows = {}
+    for x in data:
+        m = re.search(r"-?\d+", x.get("trading_Date") or "")
+        c, h = x.get("trading_close"), x.get("trading_high")
+        if not m or not c or c <= 0:
+            continue
+        d = _ms_to_pkt_date(int(m.group()))
+        rows[d] = (d, float(x.get("trading_open") or 0), float(h or c), float(x.get("trading_low") or 0),
+                   float(c), int(x.get("trading_vol") or 0))
+    return [rows[k] for k in sorted(rows)]
+
+
+# ── TradingView screener (universe + fallback daily bar) ───────────
+def tradingview_scan(tries=2):
+    """(stocks {sym: name}, bars {sym: (date, o, h, l, c, v, prev_close)}) for every PSX common stock.
+
+    One POST. `time` is the latest bar's open time (UTC); its PKT date is the session
+    the OHLC belongs to. A bar for today is dropped while the session may still be
+    forming. prev_close is derived from `change` %: on ex-dates TradingView's reference
+    is the adjusted previous close, which is exactly what apply_bar() wants as `ldcp`.
+    """
+    body = {"columns": TV_COLUMNS, "filter": [{"left": "type", "operation": "equal", "right": "stock"}],
+            "range": [0, 5000], "sort": {"sortBy": "name", "sortOrder": "asc"}}
+    err = None
+    for attempt in range(tries):
+        try:
+            r = session.post(TV_SCAN, json=body, timeout=(15, 60))
+            r.raise_for_status()
+            data = r.json().get("data") or []
+            break
+        except (requests.RequestException, ValueError) as e:
+            err = e
+            if attempt < tries - 1:
+                time.sleep(3.0)
+    else:
+        raise err
+    stocks, bars = {}, {}
+    today = now_pkt().date().isoformat()
+    final = session_closed_now()
+    for x in data:
+        d = x.get("d") or []
+        if len(d) < len(TV_COLUMNS):
+            continue
+        sym, desc, typ, sub, t, o, h, l, c, v, chg = d[:len(TV_COLUMNS)]
+        if typ != "stock" or sub != "common" or not sym:
+            continue
+        stocks[sym] = (desc or "").strip()
+        if not t or not c or c <= 0:
+            continue
+        bar_date = datetime.fromtimestamp(int(t), tz=timezone.utc).astimezone(PKT).date().isoformat()
+        if bar_date == today and not final:
+            continue
+        prev = c / (1 + chg / 100.0) if (chg is not None and chg > -100) else 0.0
+        bars[sym] = (bar_date, float(o or 0), float(h or c), float(l or 0), float(c), int(v or 0), round(prev, 4))
+    return stocks, bars
+
+
+def tv_session_date(tv_bars, min_rows=50):
+    """Most common bar date across TradingView rows, if at least `min_rows` share it."""
+    if not tv_bars:
+        return None
+    d, n = collections.Counter(b[0] for b in tv_bars.values()).most_common(1)[0]
+    return date.fromisoformat(d) if n >= min_rows else None
+
+
+# ── Universe ───────────────────────────────────────────────────────
+def portal_symbols():
+    """Portal /symbols if it ever answers again (JSON list); None otherwise (HTML 404 since 2026-09-15)."""
     try:
-        return float(s)
-    except ValueError:
-        return 0.0
-
-
-def _cells(tr_html):
-    return [_TAG.sub("", c).strip() for c in _TD.findall(tr_html)]
-
-
-# ── PSX Data Portal ────────────────────────────────────────────────
-def get_equities():
-    """symbol -> name for every listed equity (no debt, ETFs, rights or preference shares)."""
-    r = session.get(f"{PSX_BASE}/symbols", timeout=30)
-    r.raise_for_status()
+        r = session.get(f"{PSX_BASE}/symbols", timeout=15)
+        if r.status_code != 200 or "json" not in (r.headers.get("Content-Type") or "").lower():
+            return None
+        rows = r.json()
+    except Exception:
+        return None
     out = {}
-    for x in r.json():
-        if x.get("isDebt") or x.get("isETF"):
+    for x in rows if isinstance(rows, list) else []:
+        if x.get("isDebt") or x.get("isETF") or not x.get("symbol"):
             continue
         name = x.get("name") or ""
         if _NON_EQUITY.search(name):
             continue
         out[x["symbol"]] = name
-    return out
+    return out or None
 
 
-# Market-watch tags a ticker on special days: ABLXD = ABL ex-dividend, XB = ex-bonus,
-# XR = ex-rights, AMTEXNC = AMTEX flagged non-compliant. Map those back to the base
-# symbol so the bar (and, on XB days, the bonus adjustment) is not missed.
-_MW_SUFFIXES = ("XDXB", "XBXD", "XDXR", "XRXD", "XD", "XB", "XR", "NC")
+def is_share_class(sym, universe):
+    """True for a preference / rights ticker of a company already in the universe (ASLPS → ASL, GCWLR → GCWL)."""
+    for suf in _SHARE_CLASS_SUFFIXES:
+        if sym.endswith(suf) and len(sym) > len(suf) and sym[:-len(suf)] in universe:
+            return True
+    return False
 
 
-def _base_symbol(sym, equities):
-    if sym in equities:
-        return sym
-    for suf in _MW_SUFFIXES:
-        if sym.endswith(suf) and sym[:-len(suf)] in equities:
-            return sym[:-len(suf)]
-    return None
+def merge_universe(universe, *sources):
+    """Add new symbols from each {sym: name} source (names fill in when missing), drop share classes.
 
-
-def market_watch(equities):
-    """base symbol -> dict(ldcp, open, high, low, close, volume) for every equity that traded in the latest session."""
-    r = session.get(f"{PSX_BASE}/market-watch", timeout=60)
-    r.raise_for_status()
-    out = {}
-    for tr in _TR.findall(r.text):
-        c = _cells(tr)
-        # SYMBOL, SECTOR, LISTED IN, LDCP, OPEN, HIGH, LOW, CURRENT, CHANGE, CHANGE (%), VOLUME
-        if len(c) < 11 or not c[0] or c[0].upper() == "SYMBOL":
-            continue
-        base = _base_symbol(c[0], equities)
-        if base is None:                       # ETFs, preference shares, debt, unknown tags
-            continue
-        ldcp, o, h, l, cl, v = _num(c[3]), _num(c[4]), _num(c[5]), _num(c[6]), _num(c[7]), _num(c[10])
-        if cl > 0 and base not in out:
-            out[base] = {"ldcp": ldcp, "open": o, "high": h if h > 0 else cl, "low": l, "close": cl,
-                         "volume": int(v), "tag": c[0][len(base):]}
-    return out
-
-
-def portal_month(sym, year, month):
-    """One month of EOD OHLCV from the portal -> ascending rows (date, o, h, l, c, v)."""
-    r = session.post(f"{PSX_BASE}/historical", data={"month": month, "year": year, "symbol": sym}, timeout=30)
-    r.raise_for_status()
-    rows = []
-    for tr in _TR.findall(r.text):
-        c = _cells(tr)
-        if len(c) < 6 or c[0].upper() == "DATE":
-            continue
-        try:
-            d = datetime.strptime(c[0], "%b %d, %Y").date().isoformat()
-            o, h, l, cl = (_num(x) for x in c[1:5])
-            v = int(_num(c[5]))
-        except ValueError:
-            continue
-        if cl > 0:
-            rows.append((d, o, h if h > 0 else cl, l, cl, v))
-    return sorted(rows)
-
-
-def latest_session_date():
-    """Newest CLOSED session date on the portal, from a bellwether's current-month table.
-
-    Today's row only counts after SESSION_CUTOFF; before that the last closed session wins.
+    Returns (universe, added) — symbols are never removed by a source going quiet.
     """
-    now = now_pkt()
-    months = [(now.year, now.month)]
-    prev = (now.replace(day=1) - timedelta(days=1))
-    months.append((prev.year, prev.month))
+    added = []
+    for src in sources:
+        for sym, name in (src or {}).items():
+            if sym not in universe:
+                universe[sym] = name or ""
+                added.append(sym)
+            elif not universe[sym] and name:
+                universe[sym] = name
+    for sym in [s for s in universe if is_share_class(s, universe)]:
+        universe.pop(sym)
+    return universe, [s for s in added if s in universe]
+
+
+def load_universe(path=UNIVERSE_FILE):
+    data = load_json(path, {"symbols": {}})
+    return dict(data.get("symbols") or {})
+
+
+def save_universe(universe, path=UNIVERSE_FILE):
+    save_json({"updated": now_pkt().date().isoformat(), "count": len(universe),
+               "symbols": dict(sorted(universe.items()))}, path)
+
+
+# ── Session date ───────────────────────────────────────────────────
+def scs_bellwether_date():
+    """Newest closed session per SCS Trade (first bellwether with bars), or None if SCS Trade is unreachable."""
+    start = (now_pkt().date() - timedelta(days=14)).strftime("%m/%d/%Y")
     for sym in BELLWETHERS:
-        for (y, m) in months:
-            try:
-                rows = drop_forming(portal_month(sym, y, m))
-            except Exception:
-                continue
-            if rows:
-                return date.fromisoformat(rows[-1][0])
+        try:
+            rows = drop_forming(scs_history(sym, start=start, tries=2))
+        except Exception as e:
+            print(f"  session probe {sym}: {type(e).__name__}")
+            continue
+        if rows:
+            return date.fromisoformat(rows[-1][0])
     return None
 
 
-# ── SCSTrade (full history) ────────────────────────────────────────
-def scs_history(sym, start="01/01/1990"):
-    """Whole daily history in one call -> ascending rows (date, o, h, l, c, v). Empty list if none."""
-    end = (now_pkt() + timedelta(days=1)).strftime("%m/%d/%Y")
-    r = session.post(f"{SCS_BASE}/stockscreening/SS_CompanySnapShotHP.aspx/chart",
-                     json={"par": sym, "date1": start, "date2": end},
-                     headers={"Content-Type": "application/json"}, timeout=(15, 60))
-    r.raise_for_status()
-    rows = {}
-    for x in r.json().get("d") or []:
-        ms = int(re.search(r"-?\d+", x["trading_Date"]).group())
-        d = datetime.fromtimestamp(ms / 1000, tz=timezone.utc).astimezone(PKT).date().isoformat()
-        c, h = x.get("trading_close"), x.get("trading_high")
-        if not c or c <= 0:
+def latest_session_date(tv_bars):
+    """(session_date, source) — the newest CLOSED session and which source vouches for it.
+
+    SCS Trade is authoritative. On a weekday after the cutoff a session is expected
+    today: if SCS Trade does not have it yet but TradingView does, wait (polling SCS
+    Trade every SESSION_POLL s, up to SESSION_WAIT) and finally fall back to
+    TradingView. If neither has a newer session than SCS Trade's last bar, the day is
+    a holiday and there is nothing to wait for. (None, None) = both sources down.
+    """
+    today = now_pkt().date()
+    expect_today = today.weekday() < 5 and session_closed_now()
+    deadline = time.time() + (SESSION_WAIT if expect_today else 0)
+    tv_date = tv_session_date(tv_bars)
+    while True:
+        d = scs_bellwether_date()
+        if d is not None and (d >= today or not expect_today):
+            return d, "scstrade"
+        if d is not None and tv_date is not None and tv_date <= d:
+            return d, "scstrade"                       # TradingView has no newer session either → holiday
+        if time.time() < deadline:                     # SCS Trade late or down on a trading day → wait
+            print(f"  waiting for today's EOD bar (SCS Trade {d}, TradingView {tv_date}) — retry in {SESSION_POLL}s")
+            time.sleep(SESSION_POLL)
             continue
-        rows[d] = (d, float(x.get("trading_open") or 0), float(h or c), float(x.get("trading_low") or 0),
-                   float(c), int(x.get("trading_vol") or 0))
-    return [rows[k] for k in sorted(rows)]
+        if tv_date is not None and (d is None or tv_date > d):
+            return tv_date, "tradingview"
+        return d, ("scstrade" if d else None)
 
 
 # ── Corporate-action adjustment ────────────────────────────────────
@@ -284,55 +371,15 @@ def entry_from_rows(rows, source, partial):
             "source": source, "partial": partial}
 
 
-def portal_history(sym, months=PORTAL_MONTHS):
-    """Fallback: walk back month by month; stop after 3 empty months once some data exists.
-
-    Returns (rows, had_error) — had_error means at least one month request failed, so an
-    empty result is NOT proof that the stock has no data.
-    """
-    now = now_pkt()
-    y, m = now.year, now.month
-    rows, empty_run, got_any, had_error = [], 0, False, False
-    for _ in range(months):
-        try:
-            part = portal_month(sym, y, m)
-        except Exception:
-            part, had_error = [], True
-        if part:
-            rows = part + rows
-            got_any, empty_run = True, 0
-        else:
-            empty_run += 1
-            if (got_any and empty_run >= 3) or (not got_any and empty_run >= 6):
-                break
-        m -= 1
-        if m == 0:
-            y, m = y - 1, 12
-        time.sleep(REQUEST_PAUSE)
-    return sorted(set(rows)), had_error
-
-
 def backfill_symbol(sym):
-    """(entry, status) from SCSTrade, falling back to the portal.
+    """(entry, status) from SCS Trade: "ok", or "nodata" when it answered and has no prices.
 
-    status: "ok" (entry built), "nodata" (both sources answered and have nothing — the
-    stock is inactive/delisted), or "error" (a source failed; retry next run, cache nothing).
+    Transport errors propagate (the caller leaves the symbol uncached and retries next run).
     """
-    scs_failed = False
-    try:
-        rows = drop_forming(scs_history(sym))
-    except Exception as e:
-        print(f"  [{sym}] SCSTrade failed ({type(e).__name__}) — trying portal")
-        rows, scs_failed = [], True
+    rows = drop_forming(scs_history(sym))
     if rows:
         return entry_from_rows(rows, "scstrade", False), "ok"
-    rows, portal_failed = portal_history(sym)
-    rows = drop_forming(rows)
-    if rows:
-        return entry_from_rows(rows, "portal", True), "ok"
-    # The portal is the authority on "this stock has no prices": only trust an empty
-    # answer when every portal request actually succeeded.
-    return None, ("error" if portal_failed else "nodata")
+    return None, "nodata"
 
 
 def apply_bar(entry, d, o, h, c, ldcp=0.0):
@@ -351,7 +398,7 @@ def apply_bar(entry, d, o, h, c, ldcp=0.0):
 
 
 def catch_up(sym, entry):
-    """Missed sessions (a run was skipped): pull bars after last_date from SCSTrade."""
+    """Pull every bar after last_date from SCS Trade and apply it. Returns bars applied."""
     start = (date.fromisoformat(entry["last_date"]) - timedelta(days=3)).strftime("%m/%d/%Y")
     rows = drop_forming(scs_history(sym, start=start))
     n = 0
@@ -359,6 +406,50 @@ def catch_up(sym, entry):
         if d > entry["last_date"]:
             apply_bar(entry, d, o, h, c)
             n += 1
+    return n
+
+
+def roll_forward(syms, universe, sess, tv_bars, scs_ok=True):
+    """Bring cached symbols up to `sess`: SCS Trade catch-up per symbol, TradingView's bar as fallback.
+
+    Symbols that traded within ROLL_WINDOW_DAYS are refreshed every run; staler
+    (dormant / suspended) ones are re-probed every RECHECK_DAYS so a stock that
+    resumes trading comes back by itself. Returns counters.
+    """
+    today = now_pkt().date()
+    sess_iso = sess.isoformat()
+    n = {"tried": 0, "scs": 0, "tv": 0, "bars": 0, "fail": 0, "dormant_skipped": 0}
+    for s in sorted(syms):
+        e = syms[s]
+        if e.get("nodata") or s not in universe:
+            continue
+        ld = date.fromisoformat(e["last_date"])
+        if ld >= sess:
+            continue
+        if (sess - ld).days > ROLL_WINDOW_DAYS:
+            chk = e.get("checked")
+            if chk and (today - date.fromisoformat(chk)).days < RECHECK_DAYS:
+                n["dormant_skipped"] += 1
+                continue
+            e["checked"] = today.isoformat()
+        n["tried"] += 1
+        done = False
+        if scs_ok:
+            try:
+                n["bars"] += catch_up(s, e)
+                n["scs"] += 1
+                done = True
+            except Exception as ex:
+                print(f"  [{s}] SCS Trade catch-up failed ({type(ex).__name__})")
+            time.sleep(REQUEST_PAUSE)
+        bar = tv_bars.get(s)
+        if not done and bar and bar[0] == sess_iso and bar[0] > e["last_date"]:
+            apply_bar(e, bar[0], bar[1], bar[2], bar[4], bar[6])
+            n["tv"] += 1
+            n["bars"] += 1
+            done = True
+        if not done:
+            n["fail"] += 1
     return n
 
 
@@ -429,27 +520,33 @@ def main():
     print(f"PSX ATH Zone {today.isoformat()} | {ATH_DD_MIN:g}–{ATH_DD_MAX:g}% below adjusted ATH"
           f" | backfill ≤{BACKFILL_LIMIT}/{BACKFILL_BUDGET:.0f}s | dry_run={DRY_RUN}")
 
-    equities = get_equities()
-    print(f"Universe: {len(equities)} PSX equities")
-    sess = latest_session_date()
-    print(f"Latest closed session on portal: {sess}")
-    mw = {}
-    if market_live_now():
-        print("Market is open right now — market-watch is intraday, so today's bar is skipped (cached closes used)")
-    else:
-        try:
-            mw = market_watch(equities)
-            tagged = sum(1 for b in mw.values() if b.get("tag"))
-            print(f"Market-watch: {len(mw)} equities traded in the latest session ({tagged} under XD/XB/XR/NC tags)")
-        except Exception as e:
-            print(f"Market-watch unavailable ({type(e).__name__}) — using cached closes")
+    # Universe: committed list + portal (if alive) + TradingView; TradingView also gives fallback bars
+    universe = load_universe()
+    before = dict(universe)
+    portal = portal_symbols()
+    try:
+        tv_stocks, tv_bars = tradingview_scan()
+    except Exception as e:
+        print(f"TradingView screener unavailable ({type(e).__name__}) — universe/bars from cache only")
+        tv_stocks, tv_bars = {}, {}
+    universe, added = merge_universe(universe, portal, tv_stocks)
+    print(f"Universe: {len(universe)} PSX equities (committed {len(before)}"
+          f" + portal {'alive' if portal else 'dead'} + TradingView {len(tv_stocks)}; {len(added)} new)")
+    if added:
+        print("  new symbols: " + ", ".join(added[:30]))
+    if universe != before:
+        save_universe(universe)
+
+    sess, src = latest_session_date(tv_bars)
+    print(f"Latest closed session: {sess} (via {src})")
 
     cache = load_json(CACHE_FILE, {"symbols": {}, "last_run_session": None})
     syms = cache["symbols"]
 
-    # 1) Backfill symbols we have never seen (resumable; budgeted). Retry "nodata" ones monthly.
-    todo = [s for s in sorted(equities)
-            if s not in syms or (syms[s].get("nodata") and (today - date.fromisoformat(syms[s]["checked"])).days >= 30)]
+    # 1) Backfill symbols we have never seen (resumable; budgeted). Retry "nodata" ones every RECHECK_DAYS.
+    todo = [s for s in sorted(universe)
+            if s not in syms or (syms[s].get("nodata")
+                                 and (today - date.fromisoformat(syms[s]["checked"])).days >= RECHECK_DAYS)]
     t0, done, ok = time.time(), 0, 0
     for s in todo:
         if done >= BACKFILL_LIMIT or time.time() - t0 > BACKFILL_BUDGET:
@@ -473,43 +570,33 @@ def main():
     if done:
         save_json(cache, CACHE_FILE)
         print(f"Backfill this run: {done} symbols, {ok} with data, {time.time() - t0:.0f}s")
-    pending = [s for s in equities if s not in syms]
+    pending = [s for s in universe if s not in syms]
 
     # 2) Roll cached symbols forward to the latest session
+    n = {"tried": 0, "scs": 0, "tv": 0, "bars": 0, "fail": 0, "dormant_skipped": 0}
     if sess:
-        last_run = cache.get("last_run_session")
-        missed = bool(last_run) and (sess - date.fromisoformat(last_run)).days > 3   # more than a weekend passed
-        n_bar = n_catch = 0
-        for s, e in syms.items():
-            if e.get("nodata") or s not in equities:
-                continue
-            ld = date.fromisoformat(e["last_date"])
-            if ld >= sess:
-                continue
-            if missed and (sess - ld).days > 3:
-                try:
-                    n_catch += catch_up(s, e)
-                    time.sleep(REQUEST_PAUSE)
-                    continue
-                except Exception as ex:
-                    print(f"  [{s}] catch-up failed ({type(ex).__name__}) — using today's bar only")
-            bar = mw.get(s)
-            if bar:
-                apply_bar(e, sess.isoformat(), bar["open"], bar["high"], bar["close"], bar["ldcp"])
-                n_bar += 1
-        print(f"Rolled forward: {n_bar} from market-watch, {n_catch} catch-up bars")
+        t1 = time.time()
+        n = roll_forward(syms, universe, sess, tv_bars, scs_ok=(src == "scstrade"))
+        print(f"Rolled forward to {sess}: {n['scs']} via SCS Trade, {n['tv']} via TradingView, {n['bars']} bars,"
+              f" {n['fail']} failed, {n['dormant_skipped']} dormant skipped ({time.time() - t1:.0f}s)")
         cache["last_run_session"] = sess.isoformat()
     save_json(cache, CACHE_FILE)
+    outage = n["tried"] >= 20 and n["fail"] > MAX_FAIL_RATIO * n["tried"]
 
-    # 3) Holiday guard — on a weekday after the close with no new session, send a one-liner and keep state
+    # 3) Guards — no session / source outage / holiday: send a one-liner and keep state
     hdr = f"📈 PSX ATH Zone — {today:%d %b %Y}" + (f" (session {sess:%d %b})" if sess else "")
     hdr += f"\nRule: {ATH_DD_MIN:g}–{ATH_DD_MAX:g}% below all-time high (split/bonus-adjusted) · all PSX equities"
     holiday = sess is not None and sess < today and today.weekday() < 5 and session_closed_now()
-    if sess is None or holiday:
-        note = ("⚠️ PSX portal unavailable this run." if sess is None
-                else f"PSX market closed today (last session {sess:%d %b %Y}) — no new candle.")
+    if sess is None or outage or holiday:
+        if sess is None:
+            note = "⚠️ PSX price sources unavailable this run (SCS Trade and TradingView both failed)."
+        elif outage:
+            note = (f"⚠️ Price refresh incomplete: {n['fail']} of {n['tried']} stocks could not be updated"
+                    f" — zone list kept from the previous session.")
+        else:
+            note = f"PSX market closed today (last session {sess:%d %b %Y}) — no new candle."
         if pending:
-            note += f"\nHistory backfill in progress: {len(pending)} of {len(equities)} stocks still pending."
+            note += f"\nHistory backfill in progress: {len(pending)} of {len(universe)} stocks still pending."
         print(note)
         if not DRY_RUN:
             core.send_telegram(f"{hdr}\n\n{note}")
@@ -519,12 +606,14 @@ def main():
     # 4) Evaluate the rule
     state = load_json(STATE_FILE, {"zone": {}})
     prev = state["zone"]
-    matches, active, with_hist = [], 0, 0
-    for s in sorted(equities):
+    matches, active, with_hist, traded = [], 0, 0, 0
+    for s in sorted(universe):
         e = syms.get(s)
         if not e or e.get("nodata") or e["ath"] <= 0:
             continue
         with_hist += 1
+        if e["last_date"] == sess.isoformat():
+            traded += 1
         if (sess - date.fromisoformat(e["last_date"])).days > MAX_STALE_DAYS:
             continue
         active += 1
@@ -533,7 +622,7 @@ def main():
             continue
         first_seen = prev.get(s, {}).get("first_seen") or sess.isoformat()
         fs = date.fromisoformat(first_seen)
-        matches.append({"symbol": s, "name": equities[s], "close": e["last_close"], "last_date": e["last_date"],
+        matches.append({"symbol": s, "name": universe[s], "close": e["last_close"], "last_date": e["last_date"],
                         "ath": e["ath"], "ath_date": e["ath_date"], "dd_pct": round(dd, 2),
                         "hist_start": e["hist_start"], "partial": e.get("partial", False),
                         "first_seen": first_seen, "days_in_zone": (sess - fs).days, "new": fs == sess})
@@ -541,9 +630,9 @@ def main():
     cur = {m["symbol"] for m in matches}
     left = [f"{s} ({fail_reason(syms.get(s), sess)})" for s in sorted(prev) if s not in cur]
 
-    cov = (f"Coverage: {len(equities)} equities · {with_hist} with history · {active} active"
-           + (f" · {len(mw)} traded this session" if mw else "") + f" · {len(matches)} in zone")
-    pending_note = (f"History backfill in progress: {len(pending)} of {len(equities)} stocks still pending"
+    cov = (f"Coverage: {len(universe)} equities · {with_hist} with history · {active} active"
+           f" · {traded} traded this session · {len(matches)} in zone")
+    pending_note = (f"History backfill in progress: {len(pending)} of {len(universe)} stocks still pending"
                     f" — they will appear once loaded." if pending else "")
     text = render(hdr, matches, left, cov, pending_note)
     print(f"[PSX] {len(matches)} in zone ({sum(m['new'] for m in matches)} new), {len(left)} left, {len(pending)} pending")
@@ -551,7 +640,7 @@ def main():
     if DRY_RUN:
         print("\n----- DRY RUN: message that would be sent -----\n")
         print(text)
-        print("\n----- (no Telegram; state/archive/log untouched; cache saved) -----")
+        print("\n----- (no Telegram; state/archive/log untouched; cache + universe saved) -----")
         return
 
     core.send_telegram(text)
@@ -561,7 +650,7 @@ def main():
     state["zone"] = {m["symbol"]: {"first_seen": m["first_seen"]} for m in matches}
     state["updated"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     save_json(state, STATE_FILE)
-    print(f"Wrote {STATE_FILE}, {ARCHIVE}, {MATCHES_LOG}, {CACHE_FILE}.")
+    print(f"Wrote {STATE_FILE}, {ARCHIVE}, {MATCHES_LOG}, {CACHE_FILE}, {UNIVERSE_FILE}.")
 
 
 if __name__ == "__main__":

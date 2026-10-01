@@ -69,10 +69,12 @@ Funnel: 1,240 coins $10.0M–$500M → 96 within 40% of ATH → 23 with ≥60% l
 is **0 % – 40 % below the all-time high**. No market-cap or float filter, so the
 coverage is the whole exchange.
 
-- **Universe:** all listed equities from the official PSX Data Portal, about 705
-  tickers, excluding debt instruments, ETFs, rights and preference shares. A
-  stock that has not traded for 10 calendar days is held out until it trades
-  again, and a handful of dead listings with no price history are skipped.
+- **Universe:** every listed PSX equity, about 705 tickers, excluding debt
+  instruments, ETFs, rights and preference shares. The list lives in
+  `psx_universe.json` (committed) and grows by itself: each run merges in
+  TradingView's PSX stock list, and the official PSX Data Portal too if it ever
+  serves data again. A stock that has not traded for 10 calendar days is held
+  out until it trades again, and dead listings with no price history are skipped.
 - **All-time high, adjusted for splits and bonuses.** PSX price history is *not*
   adjusted for bonus shares, splits or rights issues. Lucky Cement, for example,
   shows a raw high of 1,796 from before its 2025 split against a price near 430,
@@ -81,12 +83,17 @@ coverage is the whole exchange.
   only be a corporate action. Those gaps are detected and the older history is
   rescaled, giving Lucky a true high near 530. Small bonuses under the cap are not
   caught and make a stock look slightly further from its high than it really is.
-- **History depth:** SCSTrade supplies the full daily history in one call, from
-  2006 for older companies and from listing for newer ones. The portal is the
-  fallback, one month per call; stocks whose history came only from the portal are
-  marked `†` in the message because their high may be understated.
-- **Schedule:** **18:00 PKT Monday to Friday**, after the close and the portal's
-  end-of-day publish. On a market holiday you get a one-line "market closed" note.
+- **Prices:** SCS Trade supplies raw exchange prices, the full daily history in
+  one call (from 2006 for older companies, from listing for newer ones) and the
+  same call for each day's update. Its prints match the exchange and TradingView
+  exactly. TradingView's PSX screener is the fallback for the daily bar if SCS
+  Trade is down or late. The official PSX Data Portal stopped serving data in
+  mid-September 2026 and is no longer relied on. A few stocks whose history was
+  loaded from the portal before that are marked `†` in the message because
+  their high may be understated.
+- **Schedule:** **18:00 PKT Monday to Friday**, after the close. If the day's
+  closing prices are not published yet the run waits up to 30 minutes for them.
+  On a market holiday you get a one-line "market closed" note.
   Manual run: Actions → **PSX ATH Zone Scan** → Run workflow.
 
 What the message looks like:
@@ -112,20 +119,25 @@ several Telegram messages automatically.
 
 **First run and history cache.** The per-stock adjusted high lives in
 `psx_ath_cache.json`, committed to the repo, and is rolled forward each session
-from the portal's market-watch page in a single call. The initial history load
-was done once and shipped with the repo. If a new stock lists, or the cache is
-ever deleted, the scanner backfills up to 400 stocks per run within a 40-minute
-budget and says in the message how many are still pending.
+with one SCS Trade call per stock (about five minutes for the whole exchange).
+Missed sessions are caught up automatically, and a stock that has not traded for
+45 days is re-checked once a month so it comes back by itself when trading
+resumes. The initial history load was done once and shipped with the repo. If a
+new stock lists, or the cache is ever deleted, the scanner backfills up to 400
+stocks per run within a 40-minute budget and says in the message how many are
+still pending.
 
-Files the PSX Action commits back: `psx_ath_cache.json`, `psx_state.json`
-(stocks in the zone and first-seen dates), `psx_alerts_archive.txt`,
-`psx_matches.jsonl`.
+Files the PSX Action commits back: `psx_ath_cache.json`, `psx_universe.json`
+(the symbol list), `psx_state.json` (stocks in the zone and first-seen dates),
+`psx_alerts_archive.txt`, `psx_matches.jsonl`.
 
 PSX tuning knobs (environment variables, same mechanism as the crypto table
 below): `PSX_ATH_DD_MIN` (0), `PSX_ATH_DD_MAX` (40), `PSX_MAX_STALE_DAYS` (10),
-`PSX_BACKFILL_LIMIT` (400), `PSX_BACKFILL_BUDGET` seconds (2400),
-`PSX_PORTAL_MONTHS` (24). `DRY_RUN=1` prints the message and sends nothing; the
-history cache is still saved so a backfill run is never wasted.
+`PSX_ROLL_WINDOW_DAYS` (45), `PSX_RECHECK_DAYS` (30), `PSX_SESSION_WAIT` seconds
+(1800), `PSX_MAX_FAIL_RATIO` (0.25), `PSX_BACKFILL_LIMIT` (400),
+`PSX_BACKFILL_BUDGET` seconds (2400). `DRY_RUN=1` prints the message and sends
+nothing; the history cache and symbol list are still saved so a backfill run is
+never wasted.
 
 ---
 

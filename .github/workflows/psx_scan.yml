@@ -2,11 +2,11 @@ name: PSX ATH Zone Scan
 
 on:
   schedule:
-    - cron: "0 13 * * 1-5"   # 18:00 PKT Mon–Fri (PSX closes 15:30 Mon–Thu / 16:30 Fri; portal EOD ~16:00 PKT)
+    - cron: "0 13 * * 1-5"   # 18:00 PKT Mon–Fri (PSX closes 15:30 Mon–Thu / 16:30 Fri; SCS Trade EOD bars are up well before this — the scanner waits up to 30 min if not)
   workflow_dispatch:
     inputs:
       dry_run:
-        description: "Dry run — print the message in the job log, send nothing (history cache is still saved)"
+        description: "Dry run — print the message in the job log, send nothing (history cache + universe are still saved)"
         type: boolean
         default: false
 
@@ -21,7 +21,7 @@ concurrency:
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 75       # first runs backfill history (≤40 min budget); normal runs take ~2 min
+    timeout-minutes: 75       # normal runs take ~5 min (one SCS Trade call per stock); a session wait adds ≤30, a history backfill ≤40
     steps:
       - uses: actions/checkout@v4
 
@@ -39,11 +39,11 @@ jobs:
           DRY_RUN: ${{ inputs.dry_run == true && '1' || '0' }}
         run: python psx_scanner.py
 
-      - name: Commit PSX cache, state, archive and matches log
+      - name: Commit PSX cache, universe, state, archive and matches log
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          for f in psx_ath_cache.json psx_state.json psx_alerts_archive.txt psx_matches.jsonl; do
+          for f in psx_ath_cache.json psx_universe.json psx_state.json psx_alerts_archive.txt psx_matches.jsonl; do
             [ -f "$f" ] && git add "$f"
           done
           if git diff --cached --quiet; then
