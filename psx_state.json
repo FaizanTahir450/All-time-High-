@@ -1,5 +1,5 @@
 {
-"updated":"2026-10-01T18:37:17+00:00",
+"updated":"2026-10-02T18:09:47+00:00",
 "zone":{
 "AABS":{
 "first_seen":"2026-09-07"
@@ -46,6 +46,9 @@
 "ANLNV":{
 "first_seen":"2026-10-01"
 },
+"ANSM":{
+"first_seen":"2026-10-02"
+},
 "ANTM":{
 "first_seen":"2026-09-07"
 },
@@ -57,9 +60,6 @@
 },
 "ARMG":{
 "first_seen":"2026-09-07"
-},
-"ASHT":{
-"first_seen":"2026-09-23"
 },
 "ASTM":{
 "first_seen":"2026-09-16"
@@ -80,9 +80,6 @@
 "first_seen":"2026-09-07"
 },
 "BAHL":{
-"first_seen":"2026-09-07"
-},
-"BFAGRO":{
 "first_seen":"2026-09-07"
 },
 "BML":{
@@ -184,9 +181,6 @@
 "FCEPL":{
 "first_seen":"2026-09-07"
 },
-"FCIBL":{
-"first_seen":"2026-10-01"
-},
 "FCL":{
 "first_seen":"2026-09-07"
 },
@@ -196,8 +190,8 @@
 "FHAM":{
 "first_seen":"2026-09-07"
 },
-"FIBLM":{
-"first_seen":"2026-10-01"
+"FIL":{
+"first_seen":"2026-10-02"
 },
 "FIMM":{
 "first_seen":"2026-10-01"
@@ -298,6 +292,9 @@
 "ICL":{
 "first_seen":"2026-09-07"
 },
+"IDEAL":{
+"first_seen":"2026-10-02"
+},
 "IGIHL":{
 "first_seen":"2026-10-01"
 },
@@ -314,9 +311,6 @@
 "first_seen":"2026-09-07"
 },
 "IPAK":{
-"first_seen":"2026-09-07"
-},
-"IREIT":{
 "first_seen":"2026-09-07"
 },
 "ISIL":{
@@ -355,11 +349,17 @@
 "KOHC":{
 "first_seen":"2026-09-07"
 },
+"KSTM":{
+"first_seen":"2026-10-02"
+},
 "LEUL":{
 "first_seen":"2026-09-07"
 },
 "LOTCHEM":{
 "first_seen":"2026-09-07"
+},
+"LPL":{
+"first_seen":"2026-10-02"
 },
 "LSECL":{
 "first_seen":"2026-09-07"
@@ -457,9 +457,6 @@
 "PAKOXY":{
 "first_seen":"2026-09-07"
 },
-"PASM":{
-"first_seen":"2026-09-17"
-},
 "PIM":{
 "first_seen":"2026-10-01"
 },
@@ -505,9 +502,6 @@
 "PTL":{
 "first_seen":"2026-09-07"
 },
-"QUICE":{
-"first_seen":"2026-09-21"
-},
 "REDCO":{
 "first_seen":"2026-09-07"
 },
@@ -549,9 +543,6 @@
 },
 "SHFA":{
 "first_seen":"2026-09-07"
-},
-"SHJS":{
-"first_seen":"2026-10-01"
 },
 "SIEM":{
 "first_seen":"2026-09-07"
