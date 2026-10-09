@@ -1,5 +1,5 @@
 {
-"updated":"2026-10-08T19:06:26+00:00",
+"updated":"2026-10-09T18:37:26+00:00",
 "zone":{
 "AABS":{
 "first_seen":"2026-09-07"
@@ -61,9 +61,6 @@
 "ARMG":{
 "first_seen":"2026-09-07"
 },
-"ASHT":{
-"first_seen":"2026-10-08"
-},
 "ATIL":{
 "first_seen":"2026-09-07"
 },
@@ -87,9 +84,6 @@
 },
 "BML":{
 "first_seen":"2026-10-01"
-},
-"BOK":{
-"first_seen":"2026-10-07"
 },
 "BRRG":{
 "first_seen":"2026-09-07"
@@ -171,6 +165,9 @@
 },
 "FCEPL":{
 "first_seen":"2026-09-07"
+},
+"FCIBL":{
+"first_seen":"2026-10-09"
 },
 "FCL":{
 "first_seen":"2026-09-07"
@@ -289,9 +286,6 @@
 "IDEAL":{
 "first_seen":"2026-10-08"
 },
-"IGIHL":{
-"first_seen":"2026-10-01"
-},
 "ILP":{
 "first_seen":"2026-09-07"
 },
@@ -306,9 +300,6 @@
 },
 "IPAK":{
 "first_seen":"2026-09-07"
-},
-"IREIT":{
-"first_seen":"2026-10-07"
 },
 "ISIL":{
 "first_seen":"2026-09-07"
@@ -339,6 +330,9 @@
 },
 "KOHC":{
 "first_seen":"2026-09-07"
+},
+"KSTM":{
+"first_seen":"2026-10-09"
 },
 "LEUL":{
 "first_seen":"2026-09-07"
@@ -431,9 +425,6 @@
 "first_seen":"2026-09-07"
 },
 "OTSU":{
-"first_seen":"2026-09-07"
-},
-"PAKL":{
 "first_seen":"2026-09-07"
 },
 "PAKOXY":{
