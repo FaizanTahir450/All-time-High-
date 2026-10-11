@@ -61,7 +61,7 @@ which Binance lists, but other exchanges (Bybit, Gate) do list xStocks.
 3. Funnel filters in order: mcap+exclusions → ATH drawdown → locked supply → `cand_ids`.
 4. Per exchange: `exchange_listings(ex_id, cand_ids)` — `/exchanges/{id}/tickers?coin_ids=a,b,…` in batches of 25, paging while a page has 100 tickers. **CoinGecko applies `coin_ids` to base OR target**, so unrelated pairs come back (e.g. every X/BTC pair if `bitcoin` were requested); only tickers whose `coin_id` is in the candidate set count. `is_stale`/`is_anomaly` tickers are ignored. One exchange failing emits a ⚠️ note and leaves its state untouched.
 5. Matches sorted new-first then by drawdown ascending; "left" = previous state ids not matched now, annotated by `check_rules()` with the first failing rule (or "no live pair").
-6. `render_message()` → Telegram (plain text, no parse_mode, split on line boundaries under 4000 chars) → `append_archive()` → `log_matches()` → `save_state()`. `DRY_RUN=1` prints the message and writes nothing.
+6. `render_message()` → Telegram (plain text, no parse_mode, split on line boundaries under 4000 chars; each part retried up to `TELEGRAM_ATTEMPTS`=4 on connection errors / 429 / 5xx with a fresh connection per attempt — added after Telegram dropped the connection on 2026-10-11 and failed the run) → `append_archive()` → `log_matches()` → `save_state()`. The send comes first on purpose: if Telegram is down the state is not advanced, so the next run re-sends with 🆕 flags intact. `DRY_RUN=1` prints the message and writes nothing.
 
 ## Data source notes
 

@@ -316,14 +316,43 @@ def _chunks(text, limit=4000):
     return parts
 
 
+TELEGRAM_ATTEMPTS = 4          # per message part; waits 5/10/15 s between attempts (or Telegram's retry_after)
+
+
 def send_telegram(text):
+    """Post the message in ≤4000-char parts (shared with psx_scanner.py).
+
+    Each part is retried on network errors (Telegram closing a connection without a
+    response happened on 2026-10-11 and failed the whole run), HTTP 429 and 5xx. A
+    fresh connection is opened for every attempt — a pooled keep-alive socket that the
+    server has already closed is exactly what produces "Remote end closed connection".
+    4xx other than 429 (bad token / chat id) is raised immediately, not retried.
+    """
     token = os.environ["TELEGRAM_BOT_TOKEN"]
     chat_id = os.environ["TELEGRAM_CHAT_ID"]
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     for part in _chunks(text):
-        resp = session.post(url, json={"chat_id": chat_id, "text": part,
-                                       "disable_web_page_preview": True}, timeout=20)
-        resp.raise_for_status()
+        payload = {"chat_id": chat_id, "text": part, "disable_web_page_preview": True}
+        for attempt in range(1, TELEGRAM_ATTEMPTS + 1):
+            wait = 5.0 * attempt
+            try:
+                resp = requests.post(url, json=payload, timeout=(10, 30))
+                if resp.status_code < 400:
+                    break
+                if resp.status_code == 429 or resp.status_code >= 500:
+                    try:
+                        wait = max(wait, float(resp.json()["parameters"]["retry_after"]))
+                    except (ValueError, KeyError, TypeError):
+                        pass
+                    problem = f"HTTP {resp.status_code}"
+                else:
+                    resp.raise_for_status()
+            except (requests.ConnectionError, requests.Timeout) as e:
+                problem = type(e).__name__
+            if attempt == TELEGRAM_ATTEMPTS:
+                raise RuntimeError(f"Telegram sendMessage failed after {TELEGRAM_ATTEMPTS} attempts ({problem})")
+            print(f"  Telegram send failed ({problem}) — retrying in {wait:.0f}s")
+            time.sleep(wait)
 
 
 def fmt_money(x):
