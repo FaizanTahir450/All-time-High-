@@ -424,3 +424,14 @@ Rules: 0–40% below ATH · MC $10.0M–$500M · ≥60% supply locked
      ▼38.3% from ATH $0.107368 (23 Sep 26) · MC $168M · 78% locked · in zone 38d
 
 Funnel: 922 coins $10.0M–$500M → 115 within 40% of ATH → 29 with ≥60% locked → Binance 1
+
+==================================================
+
+🏔 ATH Zone Scan — 16 Oct 2026
+Rules: 0–40% below ATH · MC $10.0M–$500M · ≥60% supply locked
+
+— BINANCE — 1 in zone
+• ZAMA (Zama) — $0.075617  [ZAMA/USDT]
+     ▼29.6% from ATH $0.107368 (23 Sep 26) · MC $192M · 78% locked · in zone 39d
+
+Funnel: 928 coins $10.0M–$500M → 115 within 40% of ATH → 30 with ≥60% locked → Binance 1
