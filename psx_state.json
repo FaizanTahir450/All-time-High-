@@ -1,5 +1,5 @@
 {
-"updated":"2026-10-15T17:31:15+00:00",
+"updated":"2026-10-16T17:05:58+00:00",
 "zone":{
 "AABS":{
 "first_seen":"2026-09-07"
@@ -36,9 +36,6 @@
 },
 "AKBL":{
 "first_seen":"2026-09-07"
-},
-"AKGL":{
-"first_seen":"2026-10-15"
 },
 "ALAC":{
 "first_seen":"2026-09-07"
@@ -79,13 +76,7 @@
 "BAHL":{
 "first_seen":"2026-09-07"
 },
-"BAPL":{
-"first_seen":"2026-10-06"
-},
 "BML":{
-"first_seen":"2026-10-14"
-},
-"BOK":{
 "first_seen":"2026-10-14"
 },
 "BRRG":{
@@ -109,6 +100,9 @@
 "COLG":{
 "first_seen":"2026-09-07"
 },
+"CRTM":{
+"first_seen":"2026-10-16"
+},
 "CTM":{
 "first_seen":"2026-09-07"
 },
@@ -129,6 +123,9 @@
 },
 "DOL":{
 "first_seen":"2026-09-07"
+},
+"DWTM":{
+"first_seen":"2026-10-16"
 },
 "DYNO":{
 "first_seen":"2026-09-07"
@@ -155,9 +152,6 @@
 "first_seen":"2026-09-07"
 },
 "FANM":{
-"first_seen":"2026-09-07"
-},
-"FASM":{
 "first_seen":"2026-09-07"
 },
 "FATIMA":{
@@ -388,6 +382,9 @@
 "NICL":{
 "first_seen":"2026-09-07"
 },
+"NML":{
+"first_seen":"2026-10-16"
+},
 "NNAR":{
 "first_seen":"2026-09-17"
 },
@@ -411,6 +408,9 @@
 },
 "OTSU":{
 "first_seen":"2026-09-07"
+},
+"PAKL":{
+"first_seen":"2026-10-16"
 },
 "PAKOXY":{
 "first_seen":"2026-09-07"
@@ -459,6 +459,9 @@
 },
 "PTL":{
 "first_seen":"2026-09-07"
+},
+"QUICE":{
+"first_seen":"2026-10-16"
 },
 "REDCO":{
 "first_seen":"2026-09-07"
