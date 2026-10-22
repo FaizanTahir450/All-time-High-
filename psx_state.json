@@ -1,5 +1,5 @@
 {
-"updated":"2026-10-21T17:48:00+00:00",
+"updated":"2026-10-22T17:46:47+00:00",
 "zone":{
 "AABS":{
 "first_seen":"2026-09-07"
@@ -163,9 +163,6 @@
 "FCCL":{
 "first_seen":"2026-09-07"
 },
-"FCEPL":{
-"first_seen":"2026-09-07"
-},
 "FCIBL":{
 "first_seen":"2026-10-09"
 },
@@ -181,6 +178,9 @@
 "FHAM":{
 "first_seen":"2026-09-07"
 },
+"FIBLM":{
+"first_seen":"2026-10-22"
+},
 "FIL":{
 "first_seen":"2026-10-08"
 },
@@ -192,9 +192,6 @@
 },
 "FSWL":{
 "first_seen":"2026-10-15"
-},
-"FZCM":{
-"first_seen":"2026-10-01"
 },
 "GAL":{
 "first_seen":"2026-09-07"
@@ -298,6 +295,9 @@
 "ISIL":{
 "first_seen":"2026-09-07"
 },
+"ITANZ":{
+"first_seen":"2026-10-22"
+},
 "JDWS":{
 "first_seen":"2026-09-07"
 },
@@ -319,8 +319,8 @@
 "KOHC":{
 "first_seen":"2026-09-07"
 },
-"KSTM":{
-"first_seen":"2026-10-09"
+"KPUS":{
+"first_seen":"2026-10-22"
 },
 "LEUL":{
 "first_seen":"2026-09-07"
@@ -382,9 +382,6 @@
 "NICL":{
 "first_seen":"2026-09-07"
 },
-"NML":{
-"first_seen":"2026-10-21"
-},
 "NNAR":{
 "first_seen":"2026-09-17"
 },
@@ -408,6 +405,9 @@
 },
 "OTSU":{
 "first_seen":"2026-09-07"
+},
+"PAKL":{
+"first_seen":"2026-10-22"
 },
 "PAKOXY":{
 "first_seen":"2026-09-07"
@@ -481,14 +481,8 @@
 "SAPT":{
 "first_seen":"2026-09-07"
 },
-"SARC":{
-"first_seen":"2026-10-12"
-},
 "SASML":{
 "first_seen":"2026-09-07"
-},
-"SAZEW":{
-"first_seen":"2026-10-21"
 },
 "SBL":{
 "first_seen":"2026-09-07"
@@ -533,9 +527,6 @@
 "first_seen":"2026-09-07"
 },
 "SPAC2":{
-"first_seen":"2026-09-07"
-},
-"SPSL":{
 "first_seen":"2026-09-07"
 },
 "SRR":{
