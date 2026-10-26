@@ -1,5 +1,5 @@
 {
-"updated":"2026-10-23T17:37:11+00:00",
+"updated":"2026-10-26T18:58:17+00:00",
 "zone":{
 "AABS":{
 "first_seen":"2026-09-07"
@@ -18,9 +18,6 @@
 },
 "AGIC":{
 "first_seen":"2026-09-07"
-},
-"AGP":{
-"first_seen":"2026-10-13"
 },
 "AHCL":{
 "first_seen":"2026-09-07"
@@ -93,9 +90,6 @@
 },
 "CENI":{
 "first_seen":"2026-10-21"
-},
-"CFL":{
-"first_seen":"2026-10-14"
 },
 "CHCC":{
 "first_seen":"2026-09-07"
@@ -177,9 +171,6 @@
 },
 "FHAM":{
 "first_seen":"2026-09-07"
-},
-"FIBLM":{
-"first_seen":"2026-10-22"
 },
 "FIL":{
 "first_seen":"2026-10-08"
@@ -445,6 +436,9 @@
 "PTL":{
 "first_seen":"2026-09-07"
 },
+"QUICE":{
+"first_seen":"2026-10-26"
+},
 "REDCO":{
 "first_seen":"2026-09-07"
 },
@@ -486,9 +480,6 @@
 },
 "SHFA":{
 "first_seen":"2026-09-07"
-},
-"SHJS":{
-"first_seen":"2026-10-07"
 },
 "SIEM":{
 "first_seen":"2026-09-07"
@@ -564,6 +555,9 @@
 },
 "UCAPM":{
 "first_seen":"2026-09-07"
+},
+"UDLI":{
+"first_seen":"2026-10-26"
 },
 "UPFL":{
 "first_seen":"2026-09-07"
