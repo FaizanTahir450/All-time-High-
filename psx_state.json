@@ -1,5 +1,5 @@
 {
-"updated":"2026-10-27T18:31:11+00:00",
+"updated":"2026-10-28T18:36:37+00:00",
 "zone":{
 "AABS":{
 "first_seen":"2026-09-07"
@@ -183,6 +183,9 @@
 },
 "FSWL":{
 "first_seen":"2026-10-15"
+},
+"FZCM":{
+"first_seen":"2026-10-28"
 },
 "GAL":{
 "first_seen":"2026-09-07"
@@ -397,11 +400,17 @@
 "OLPM":{
 "first_seen":"2026-09-07"
 },
+"ORM":{
+"first_seen":"2026-10-28"
+},
 "OTSU":{
 "first_seen":"2026-09-07"
 },
 "PAKOXY":{
 "first_seen":"2026-09-07"
+},
+"PASM":{
+"first_seen":"2026-10-28"
 },
 "PECO":{
 "first_seen":"2026-10-15"
@@ -426,6 +435,9 @@
 },
 "PQGTL":{
 "first_seen":"2026-09-07"
+},
+"PRET":{
+"first_seen":"2026-10-28"
 },
 "PRL":{
 "first_seen":"2026-09-07"
@@ -495,9 +507,6 @@
 },
 "SINDM":{
 "first_seen":"2026-09-07"
-},
-"SLGL":{
-"first_seen":"2026-10-27"
 },
 "SLM":{
 "first_seen":"2026-09-07"
