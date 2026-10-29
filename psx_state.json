@@ -1,5 +1,5 @@
 {
-"updated":"2026-10-28T18:36:37+00:00",
+"updated":"2026-10-29T18:45:37+00:00",
 "zone":{
 "AABS":{
 "first_seen":"2026-09-07"
@@ -130,9 +130,6 @@
 "EFERT":{
 "first_seen":"2026-09-07"
 },
-"ELCM":{
-"first_seen":"2026-10-27"
-},
 "ELSM":{
 "first_seen":"2026-09-07"
 },
@@ -150,6 +147,9 @@
 },
 "FANM":{
 "first_seen":"2026-09-07"
+},
+"FASM":{
+"first_seen":"2026-10-29"
 },
 "FATIMA":{
 "first_seen":"2026-09-07"
@@ -379,6 +379,9 @@
 "NCML":{
 "first_seen":"2026-09-07"
 },
+"NGLEL":{
+"first_seen":"2026-10-29"
+},
 "NICL":{
 "first_seen":"2026-09-07"
 },
@@ -453,6 +456,9 @@
 },
 "PSYL":{
 "first_seen":"2026-09-07"
+},
+"PTC":{
+"first_seen":"2026-10-29"
 },
 "PTL":{
 "first_seen":"2026-09-07"
