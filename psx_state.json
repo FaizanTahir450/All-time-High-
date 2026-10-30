@@ -1,5 +1,5 @@
 {
-"updated":"2026-10-29T18:45:37+00:00",
+"updated":"2026-10-30T18:21:39+00:00",
 "zone":{
 "AABS":{
 "first_seen":"2026-09-07"
@@ -175,6 +175,9 @@
 "FHAM":{
 "first_seen":"2026-09-07"
 },
+"FLYNG":{
+"first_seen":"2026-10-30"
+},
 "FPRM":{
 "first_seen":"2026-09-16"
 },
@@ -301,9 +304,6 @@
 "JKSM":{
 "first_seen":"2026-09-07"
 },
-"JSIL":{
-"first_seen":"2026-10-27"
-},
 "JSRR":{
 "first_seen":"2026-09-07"
 },
@@ -347,9 +347,6 @@
 "first_seen":"2026-09-07"
 },
 "MLCF":{
-"first_seen":"2026-09-07"
-},
-"MSOT":{
 "first_seen":"2026-09-07"
 },
 "MTL":{
@@ -403,9 +400,6 @@
 "OLPM":{
 "first_seen":"2026-09-07"
 },
-"ORM":{
-"first_seen":"2026-10-28"
-},
 "OTSU":{
 "first_seen":"2026-09-07"
 },
@@ -456,9 +450,6 @@
 },
 "PSYL":{
 "first_seen":"2026-09-07"
-},
-"PTC":{
-"first_seen":"2026-10-29"
 },
 "PTL":{
 "first_seen":"2026-09-07"
@@ -526,9 +517,6 @@
 "SOYASUP":{
 "first_seen":"2026-09-16"
 },
-"SPAC1":{
-"first_seen":"2026-09-07"
-},
 "SPAC2":{
 "first_seen":"2026-09-07"
 },
@@ -584,9 +572,6 @@
 "first_seen":"2026-09-07"
 },
 "UPFL":{
-"first_seen":"2026-09-07"
-},
-"WAHDAT":{
 "first_seen":"2026-09-07"
 },
 "WASL":{
